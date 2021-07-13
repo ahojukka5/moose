@@ -78,13 +78,7 @@ DynamicTensorMechanicsAction::DynamicTensorMechanicsAction(const InputParameters
 void
 DynamicTensorMechanicsAction::act()
 {
-  const std::array<std::string, 3> dir{"x", "y", "z"};
-
-  // error check vecolities and accelerations parameters
-  if (_velocities.size() != _ndisp)
-    paramError("velocities", "Supply one velocity variable per displacement direction");
-  if (_accelerations.size() != _ndisp)
-    paramError("accelerations", "Supply one acceleration variable per displacement direction");
+  const std::array<std::string, 3> dir{{"x", "y", "z"}};
 
   // Add aux variables for velocities and accelerations
   if (_current_task == "add_aux_variable" && getParam<bool>("add_variables"))
@@ -107,33 +101,43 @@ DynamicTensorMechanicsAction::act()
   if (_current_task == "add_aux_kernel")
   {
     // velocity aux kernels
-    for (unsigned int i = 0; i < _ndisp; ++i)
+    if (isParamValid("velocities"))
     {
-      auto kernel_type = "NewmarkVelAux";
-      auto params = getKernelParameters(kernel_type);
-      params.set<NonlinearVariableName>("variable") = _velocities[i];
-      params.set<std::vector<VariableName>>("acceleration") = {_accelerations[i]};
-      params.set<ExecFlagEnum>("execute_on") = EXEC_TIMESTEP_END;
-      params.applyParameters(parameters());
-      _problem->addAuxKernel(kernel_type, "TM_" + name() + '_' + _velocities[i], params);
+      if (_velocities.size() != _ndisp)
+        paramError("velocities", "Supply one velocity variable per displacement direction");
+      for (unsigned int i = 0; i < _ndisp; ++i)
+      {
+        auto kernel_type = "NewmarkVelAux";
+        auto params = getKernelParameters(kernel_type);
+        params.set<NonlinearVariableName>("variable") = _velocities[i];
+        params.set<std::vector<VariableName>>("acceleration") = {_accelerations[i]};
+        params.set<ExecFlagEnum>("execute_on") = EXEC_TIMESTEP_END;
+        params.applyParameters(parameters());
+        _problem->addAuxKernel(kernel_type, "TM_" + name() + '_' + _velocities[i], params);
+      }
     }
 
     // acceleration aux kernels
-    for (unsigned int i = 0; i < _ndisp; ++i)
+    if (isParamValid("accelerations"))
     {
-      auto kernel_type = "NewmarkAccelAux";
-      auto params = getKernelParameters(kernel_type);
-      params.set<NonlinearVariableName>("variable") = _accelerations[i];
-      params.set<std::vector<VariableName>>("displacement") = {_displacements[i]};
-      params.set<std::vector<VariableName>>("velocity") = {_velocities[i]};
-      params.set<ExecFlagEnum>("execute_on") = EXEC_TIMESTEP_END;
-      params.applyParameters(parameters());
-      _problem->addAuxKernel(kernel_type, "TM_" + name() + '_' + _accelerations[i], params);
+      if (_accelerations.size() != _ndisp)
+        paramError("accelerations", "Supply one acceleration variable per displacement direction");
+      for (unsigned int i = 0; i < _ndisp; ++i)
+      {
+        auto kernel_type = "NewmarkAccelAux";
+        auto params = getKernelParameters(kernel_type);
+        params.set<NonlinearVariableName>("variable") = _accelerations[i];
+        params.set<std::vector<VariableName>>("displacement") = {_displacements[i]};
+        params.set<std::vector<VariableName>>("velocity") = {_velocities[i]};
+        params.set<ExecFlagEnum>("execute_on") = EXEC_TIMESTEP_END;
+        params.applyParameters(parameters());
+        _problem->addAuxKernel(kernel_type, "TM_" + name() + '_' + _accelerations[i], params);
+      }
     }
   }
 
   // add inertia kernel
-  if (_current_task == "add_kernel")
+  if (_current_task == "add_kernel" && isParamValid("velocities") && isParamValid("accelerations"))
   {
     for (unsigned int i = 0; i < _ndisp; ++i)
     {
